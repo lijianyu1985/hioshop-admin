@@ -30,13 +30,13 @@
                         <el-upload
                                 class="upload-demo"
                                 name="file"
-                                :action="qiniuZone"
+                                :auto-upload="true"
+                                :action="uploadFileUrl"
                                 :on-remove="bannerRemove"
                                 :before-remove="beforeBannerRemove"
                                 :file-list="fileList"
-                                :on-success="handleUploadBannerSuccess"
                                 :data="picData"
-                                :before-upload="getQiniuToken"
+                                :http-request="uploadBannerImg"
                         >
                             <el-button v-if="!infoForm.img_url" size="small" type="primary">点击上传</el-button>
                         </el-upload>
@@ -50,13 +50,13 @@
                         <el-upload
                                 class="upload-demo"
                                 name="file"
-                                :action="qiniuZone"
+                                :auto-upload="true"
+                                :action="uploadFileUrl"
                                 :on-remove="iconRemove"
                                 :before-remove="beforeIconRemove"
                                 :file-list="fileList2"
                                 :data="picData"
-                                :on-success="handleUploadIconSuccess"
-                                :before-upload="getQiniuToken"
+                                :http-request="uploadIconImg"
                         >
                             <el-button v-if="!infoForm.icon_url" size="small" type="primary">点击上传</el-button>
                         </el-upload>
@@ -77,199 +77,261 @@
 </template>
 
 <script>
-    import api from '@/config/api';
-    import ElFormItem from "../../../../node_modules/element-ui/packages/form/src/form-item.vue";
+import api from "@/config/api";
+import ElFormItem from "../../../../node_modules/element-ui/packages/form/src/form-item.vue";
+import BMF from "browser-md5-file";
 
-    export default {
-        data() {
-            return {
-                root: '',
-                qiniuZone:'',
-                fileList: [],
-                fileList2: [],
-                parentCategory: [
-                    {
-                        id: 0,
-                        name: '顶级分类'
-                    }
-                ],
-                infoForm: {
-                    id: 0,
-                    name: "",
-                    parent_id: 0,
-                    front_name: '',
-                    img_url: '',
-                    sort_order: 100,
-                    icon_url:''
-                    // is_show: true,
-                },
-                infoRules: {
-                    name: [
-                        {required: true, message: '请输入名称', trigger: 'blur'},
-                    ],
-                    front_name: [
-                        {required: true, message: '请输入简介', trigger: 'blur'},
-                    ],
-                    img_url: [
-                        {required: true, message: '请选择分类图片', trigger: 'blur'},
-                    ],
-                    icon_url: [
-                        {required: true, message: '请选择分类图标', trigger: 'blur'},
-                    ],
-                },
-                picData: {
-                    token: ''
-                },
-                url: ''
-            }
-        },
-        methods: {
-            getQiniuToken() {
-                let that = this
-                this.axios.post('index/getQiniuToken').then((response) => {
-                    let resInfo = response.data.data;
-                    console.log(resInfo);
-                    that.picData.token = resInfo.token;
-                    that.url = resInfo.url;
-                })
-            },
-            beforeBannerRemove(file, fileList) {
-                return this.$confirm(`确定移除该图？删除后将无法找回`);
-            },
-            beforeIconRemove(file, fileList) {
-                return this.$confirm(`确定移除图标？删除后将无法找回`);
-            },
-            bannerRemove(file, fileList) {
-                this.infoForm.img_url = '';
-                let id = this.infoForm.id;
-                this.axios.post('category/deleteBannerImage', {id: id}).then((response) => {
-                    this.$message({
-                        type: 'success',
-                        message: '删除成功'
-                    });
-                });
-            },
-            iconRemove(file, fileList) {
-                this.infoForm.icon_url = '';
-                let id = this.infoForm.id;
-                this.axios.post('category/deleteIconImage', {id: id}).then((response) => {
-                    this.$message({
-                        type: 'success',
-                        message: '删除成功'
-                    });
-                });
-            },
-            goBackPage() {
-                this.$router.go(-1);
-            },
-            onSubmitInfo() {
-                this.infoForm.level = this.infoForm.parent_id == 0 ? 'L1' : 'L2';
-                console.log(this.infoForm.level);
-                this.$refs['infoForm'].validate((valid) => {
-                    if (valid) {
-                        this.axios.post('category/store', this.infoForm).then((response) => {
-                            if (response.data.errno === 0) {
-                                this.$message({
-                                    type: 'success',
-                                    message: '保存成功'
-                                });
-                                this.$router.go(-1)
-                            } else {
-                                this.$message({
-                                    type: 'error',
-                                    message: '保存失败'
-                                })
-                            }
-                        })
-                    } else {
-                        return false;
-                    }
-                });
-            },
-            handleUploadBannerSuccess(res, file) {
-                let url = this.url;
-                this.infoForm.img_url = url + res.key;
-            },
-            handleUploadIconSuccess(res, file) {
-                let url = this.url;
-                this.infoForm.icon_url = url + res.key;
-            },
-            getTopCategory() {
-                this.axios.get('category/topCategory').then((response) => {
-                    this.parentCategory = this.parentCategory.concat(response.data.data);
-                })
-            },
-            getInfo() {
-                if (this.infoForm.id <= 0) {
-                    return false
-                }
-                //加载分类详情
-                let that = this
-                this.axios.get('category/info', {
-                    params: {
-                        id: that.infoForm.id
-                    }
-                }).then((response) => {
-                    let resInfo = response.data.data;
-                    console.log(resInfo);
-                    let data = {
-                        name: '分类图',
-                        url: resInfo.img_url
-                    };
-                    this.fileList.push(data);
-                    let iconData = {
-                        name: '图标',
-                        url: resInfo.icon_url
-                    };
-                    this.fileList2.push(iconData);
-                    that.infoForm = resInfo;
-                })
-            }
+const bmf = new BMF();
 
+export default {
+  data() {
+    return {
+      root: "",
+      uploadFileUrl: "",
+      fileList: [],
+      fileList2: [],
+      parentCategory: [
+        {
+          id: 0,
+          name: "顶级分类",
         },
-        components: {ElFormItem},
-        mounted() {
-            this.getTopCategory();
-            this.infoForm.id = this.$route.query.id || 0;
-            this.getInfo();
-            this.root = api.rootUrl;
-            this.qiniuZone = api.qiniu;
-            this.getQiniuToken();
+      ],
+      infoForm: {
+        id: 0,
+        name: "",
+        parent_id: 0,
+        front_name: "",
+        img_url: "",
+        sort_order: 100,
+        icon_url: "",
+        // is_show: true,
+      },
+      infoRules: {
+        name: [{ required: true, message: "请输入名称", trigger: "blur" }],
+        front_name: [
+          { required: true, message: "请输入简介", trigger: "blur" },
+        ],
+        img_url: [
+          { required: true, message: "请选择分类图片", trigger: "blur" },
+        ],
+        icon_url: [
+          { required: true, message: "请选择分类图标", trigger: "blur" },
+        ],
+      },
+      picData: {
+        token: "",
+      },
+      url: "https://laosange-image.oss-cn-beijing.aliyuncs.com/",
+    };
+  },
+  methods: {
+    generateFilename(file, callback) {
+      bmf.md5(
+        file,
+        (err, md5) => {
+          callback(md5 + "_" + file.name);
+        },
+        (progress) => {
+          console.log("progress number:", progress);
         }
-    }
-
+      );
+    },
+    uploadBannerImg(request) {
+      const that = this;
+      const file = request.file;
+      lrz(file)
+        .then((rst) => {
+          const config = {
+            headers: {
+              "Content-Type": "multipart/form-data",
+            },
+          };
+          that.generateFilename(file, (filename) => {
+            const formData = new FormData();
+            formData.append("file", rst.file);
+            formData.append("key", filename);
+            this.$http.post(this.uploadFileUrl, formData, config).then((res) => {
+              this.handleUploadBannerSuccess(res.data);
+            });
+          });
+        })
+        .catch(function(err) {
+          console.log(err);
+        });
+    },
+    uploadIconImg(request) {
+      const that = this;
+      const file = request.file;
+      lrz(file)
+        .then((rst) => {
+          const config = {
+            headers: {
+              "Content-Type": "multipart/form-data",
+            },
+          };
+          that.generateFilename(file, (filename) => {
+            const formData = new FormData();
+            formData.append("file", rst.file);
+            formData.append("key", filename);
+            this.$http.post(this.uploadFileUrl, formData, config).then((res) => {
+              this.handleUploadIconSuccess(res.data);
+            });
+          });
+        })
+        .catch(function(err) {
+          console.log(err);
+        });
+    },
+    getQiniuToken() {
+      let that = this;
+      this.axios.post("index/getQiniuToken").then((response) => {
+        let resInfo = response.data.data;
+        console.log(resInfo);
+        that.picData.token = resInfo.token;
+        that.url = resInfo.url;
+      });
+    },
+    beforeBannerRemove(file, fileList) {
+      return this.$confirm(`确定移除该图？删除后将无法找回`);
+    },
+    beforeIconRemove(file, fileList) {
+      return this.$confirm(`确定移除图标？删除后将无法找回`);
+    },
+    bannerRemove(file, fileList) {
+      this.infoForm.img_url = "";
+      let id = this.infoForm.id;
+      this.axios
+        .post("category/deleteBannerImage", { id: id })
+        .then((response) => {
+          this.$message({
+            type: "success",
+            message: "删除成功",
+          });
+        });
+    },
+    iconRemove(file, fileList) {
+      this.infoForm.icon_url = "";
+      let id = this.infoForm.id;
+      this.axios
+        .post("category/deleteIconImage", { id: id })
+        .then((response) => {
+          this.$message({
+            type: "success",
+            message: "删除成功",
+          });
+        });
+    },
+    goBackPage() {
+      this.$router.go(-1);
+    },
+    onSubmitInfo() {
+      this.infoForm.level = this.infoForm.parent_id == 0 ? "L1" : "L2";
+      console.log(this.infoForm.level);
+      this.$refs["infoForm"].validate((valid) => {
+        if (valid) {
+          this.axios.post("category/store", this.infoForm).then((response) => {
+            if (response.data.errno === 0) {
+              this.$message({
+                type: "success",
+                message: "保存成功",
+              });
+              this.$router.go(-1);
+            } else {
+              this.$message({
+                type: "error",
+                message: "保存失败",
+              });
+            }
+          });
+        } else {
+          return false;
+        }
+      });
+    },
+    handleUploadBannerSuccess(res, file) {
+      let url = this.url;
+      this.infoForm.img_url = url + res.data.name;
+    },
+    handleUploadIconSuccess(res, file) {
+      let url = this.url;
+      this.infoForm.icon_url = url + res.data.name;
+    },
+    getTopCategory() {
+      this.axios.get("category/topCategory").then((response) => {
+        this.parentCategory = this.parentCategory.concat(response.data.data);
+      });
+    },
+    getInfo() {
+      if (this.infoForm.id <= 0) {
+        return false;
+      }
+      //加载分类详情
+      let that = this;
+      this.axios
+        .get("category/info", {
+          params: {
+            id: that.infoForm.id,
+          },
+        })
+        .then((response) => {
+          let resInfo = response.data.data;
+          console.log(resInfo);
+          let data = {
+            name: "分类图",
+            url: resInfo.img_url,
+          };
+          this.fileList.push(data);
+          let iconData = {
+            name: "图标",
+            url: resInfo.icon_url,
+          };
+          this.fileList2.push(iconData);
+          that.infoForm = resInfo;
+        });
+    },
+  },
+  components: { ElFormItem },
+  mounted() {
+    this.getTopCategory();
+    this.infoForm.id = this.$route.query.id || 0;
+    this.getInfo();
+    this.root = api.rootUrl;
+    this.url = api.alioss;
+    this.uploadFileUrl = api.uploadAddress;
+    // this.getQiniuToken();
+  },
+};
 </script>
 
 <style scoped>
-    .image-uploader {
-        height: 105px;
-    }
+.image-uploader {
+  height: 105px;
+}
 
-    .image-uploader .el-upload {
-        border: 1px solid #d9d9d9;
-        cursor: pointer;
-        position: relative;
-        overflow: hidden;
-    }
+.image-uploader .el-upload {
+  border: 1px solid #d9d9d9;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
 
-    .image-uploader .el-upload:hover {
-        border-color: #20a0ff;
-    }
+.image-uploader .el-upload:hover {
+  border-color: #20a0ff;
+}
 
-    .image-uploader .image-uploader-icon {
-        font-size: 28px;
-        color: #8c939d;
-        min-width: 105px;
-        height: 105px;
-        line-height: 105px;
-        text-align: center;
-    }
+.image-uploader .image-uploader-icon {
+  font-size: 28px;
+  color: #8c939d;
+  min-width: 105px;
+  height: 105px;
+  line-height: 105px;
+  text-align: center;
+}
 
-    .image-show {
-        background-color: #f8f8f8;
-        min-width: 105px;
-        height: 105px;
-        display: block;
-    }
-
+.image-show {
+  background-color: #f8f8f8;
+  min-width: 105px;
+  height: 105px;
+  display: block;
+}
 </style>

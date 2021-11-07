@@ -23,8 +23,9 @@
 						</div>
 					</el-form-item>
 					<el-form-item label="广告图片" prop="image_url" v-if="!infoForm.image_url">
-						<el-upload name="file" ref="upload" class="upload-demo" :action="qiniuZone" :on-success="handleSuccess"
-						 :before-upload="getQiniuToken" :auto-upload="true" list-type="picture-card" :data="picData" :http-request="uploadIndexImg">
+						<el-upload name="file" ref="upload" class="upload-demo" :action="uploadFileUrl" :on-success="handleSuccess"
+						 
+                          :auto-upload="true" list-type="picture-card" :data="picData" :http-request="uploadIndexImg">
 							<el-button size="small" type="primary">点击上传</el-button>
 							<div slot="tip" class="el-upload__tip">只能上传jpg/png文件</div>
 						</el-upload>
@@ -91,246 +92,267 @@
 </template>
 
 <script>
-    import api from '@/config/api';
-	import lrz from 'lrz'
-	import moment from 'moment'
-    export default {
-        data() {
-            return {
-                qiniuZone:'',
-                root: '',
-                fileList: [],
-                infoForm: {
-                    id: 0,
-                    image_url: '',
-                    link_type: 0,
-                    enabled: 0,
-                    end_time: '',
-                    goods_id:0,
-                    link:''
-                },
-                infoRules: {
-                    image_url: [
-                        {required: true, message: '请输入广告图片', trigger: 'blur'},
-                    ],
-                    end_time: [
-                        {required: true, message: '请选择时间', trigger: 'blur'},
-                    ],
-                },
-                picData: {
-                    token: ''
-                },
-                url: '',
-                chooseRelateGoods: [],
-                related_pop: false,
-				previewList: [],
-            }
-        },
-        methods: {
-			handleSuccess(){},
-			previewIndexImg() {
-				let that = this;
-				that.previewList = [];
-				that.previewList.push(that.infoForm.image_url);
-			},
-			delePicList() {
-				let that = this;
-				that.$confirm('确定删除该图片?', '提示', {
-						confirmButtonText: '确定',
-						cancelButtonText: '取消',
-						type: 'warning'
-					})
-					.then(() => {
-						that.infoForm.image_url = '';
-					})
-					.catch(() => {})
-			},
-			uploadIndexImg(request) {
-				const file = request.file;
-				lrz(file).then((rst) => {
-					const config = {
-						headers: {
-							'Content-Type': 'multipart/form-data'
-						},
-					};
-					const fileName = moment().format('YYYYMMDDHHmmssSSS') + Math.floor(Math.random() * 100) + file.name; //自定义图片名
-					const formData = new FormData();
-					formData.append('file', rst.file);
-					formData.append('token', this.picData.token);
-					formData.append('key', fileName);
-					this.$http.post(this.qiniuZone, formData, config).then((res) => {
-						this.handleUploadImageSuccess(res.data)
-					})
-				}).catch(function(err){
-					console.log(err)
-				})
-			},
-			handleUploadImageSuccess(res, file) {
-			    let url = this.url;
-			    this.infoForm.image_url = url + res.key;
-			},
-            relateSelect(id) {
-                console.log(id);
-                this.infoForm.goods_id = id;
-                this.related_pop = false;
-            },
-            relateGoodsClick() {
-                this.axios.post('ad/getallrelate', {id: this.infoForm.id}).then((response) => {
-                    if (response.data.errno === 0) {
-                        this.chooseRelateGoods = response.data.data
-                    }
-                });
-            },
-            test() {
-                console.log(this.infoForm.end_time);
-            },
-            beforeAdRemove() {
-                return this.$confirm(`确定移除？`);
-            },
-            adRemove(file, fileList) {
-                this.infoForm.image_url = '';
-            },
-            getQiniuToken() {
-                let that = this
-                this.axios.post('index/getQiniuToken').then((response) => {
-                    let resInfo = response.data.data;
-                    console.log(resInfo);
-                    that.picData.token = resInfo.token;
-                    that.url = resInfo.url;
-                })
-            },
-            goBackPage() {
-                this.$router.go(-1);
-            },
-            onSubmitInfo() {
-                console.log(this.infoForm);
-                // return false;
-                let time = this.infoForm.end_time
-                if (time == 0) {
-                    this.$message({
-                        type: 'error',
-                        message: '请选择时间'
-                    });
-                    return false;
-                }
-                if (this.infoForm.link_type == 0) {
-                    if(this.infoForm.goods_id == 0 ){
-                        this.$message({
-                            type: 'error',
-                            message: '请选择商品'
-                        });
-                        return false;
-                    }
-                }
-                if (this.infoForm.link_type == 1) {
-                    if(this.infoForm.link == '' ){
-                        this.$message({
-                            type: 'error',
-                            message: '请输入链接'
-                        });
-                        return false;
-                    }
-                }
-                this.$refs['infoForm'].validate((valid) => {
-                    if (valid) {
-                        this.axios.post('ad/store', this.infoForm).then((response) => {
-                            if (response.data.errno === 0) {
-                                this.$message({
-                                    type: 'success',
-                                    message: '保存成功'
-                                });
-                                this.$router.go(-1);
-                            } else if (response.data.errno === 100) {
-                                this.$message({
-                                    type: 'error',
-                                    message: '该商品已经有广告关联'
-                                })
-                            }
-                            else {
-                                this.$message({
-                                    type: 'error',
-                                    message: '保存失败'
-                                })
-                            }
-                        })
-                    } else {
-                        return false;
-                    }
-                });
-            },
-            getInfo() {
-                if (this.infoForm.id <= 0) {
-                    return false
-                }
-                //加载广告详情
-                let that = this
-                this.axios.get('ad/info', {
-                    params: {
-                        id: that.infoForm.id
-                    }
-                }).then((response) => {
-                    let resInfo = response.data.data;
-                    resInfo.enabled = resInfo.enabled ? "1" : "0";
-                    that.infoForm = resInfo;
-                    that.infoForm.end_time = resInfo.end_time * 1000;
-                    let info = {
-                        name: resInfo.name,
-                        url: resInfo.image_url
-                    };
-                    this.fileList.push(info);
-                    console.log(this.infoForm);
-                })
-            }
-        },
-        components: {},
-        mounted() {
-            this.infoForm.id = this.$route.query.id || 0;
-            this.getInfo();
-            this.root = api.rootUrl;
-            this.getQiniuToken();
-            this.qiniuZone = api.qiniu;
-        }
-    }
+import api from "@/config/api";
+import lrz from "lrz";
+import moment from "moment";
+import BMF from "browser-md5-file";
 
+const bmf = new BMF();
+export default {
+  data() {
+    return {
+      uploadFileUrl: "",
+      root: "",
+      fileList: [],
+      infoForm: {
+        id: 0,
+        image_url: "",
+        link_type: 0,
+        enabled: 0,
+        end_time: "",
+        goods_id: 0,
+        link: "",
+      },
+      infoRules: {
+        image_url: [
+          { required: true, message: "请输入广告图片", trigger: "blur" },
+        ],
+        end_time: [{ required: true, message: "请选择时间", trigger: "blur" }],
+      },
+      picData: {
+        token: "",
+      },
+      url: "https://laosange-image.oss-cn-beijing.aliyuncs.com/",
+      chooseRelateGoods: [],
+      related_pop: false,
+      previewList: [],
+    };
+  },
+  methods: {
+    handleSuccess() {},
+    previewIndexImg() {
+      let that = this;
+      that.previewList = [];
+      that.previewList.push(that.infoForm.image_url);
+    },
+    delePicList() {
+      let that = this;
+      that
+        .$confirm("确定删除该图片?", "提示", {
+          confirmButtonText: "确定",
+          cancelButtonText: "取消",
+          type: "warning",
+        })
+        .then(() => {
+          that.infoForm.image_url = "";
+        })
+        .catch(() => {});
+    },
+    generateFilename(file, callback) {
+      bmf.md5(
+        file,
+        (err, md5) => {
+          callback(md5 + "_" + file.name);
+        },
+        (progress) => {
+          console.log("progress number:", progress);
+        }
+      );
+    },
+    uploadIndexImg(request) {
+      const that = this;
+      const file = request.file;
+      lrz(file)
+        .then((rst) => {
+          const config = {
+            headers: {
+              "Content-Type": "multipart/form-data",
+            },
+          };
+          // const fileName = moment().format('YYYYMMDDHHmmssSSS') + Math.floor(Math.random() * 100) + file.name; //自定义图片名
+          that.generateFilename(file, (filename) => {
+            const formData = new FormData();
+            formData.append("file", rst.file);
+            formData.append("token", this.picData.token);
+            formData.append("key", filename);
+            this.$http.post(this.uploadFileUrl, formData, config).then((res) => {
+              this.handleUploadImageSuccess(res.data);
+            });
+          });
+        })
+        .catch(function(err) {
+          console.log(err);
+        });
+    },
+    handleUploadImageSuccess(res, file) {
+      let url = this.url;
+      this.infoForm.image_url = url + res.data.name;
+    },
+    relateSelect(id) {
+      console.log(id);
+      this.infoForm.goods_id = id;
+      this.related_pop = false;
+    },
+    relateGoodsClick() {
+      this.axios
+        .post("ad/getallrelate", { id: this.infoForm.id })
+        .then((response) => {
+          if (response.data.errno === 0) {
+            this.chooseRelateGoods = response.data.data;
+          }
+        });
+    },
+    test() {
+      console.log(this.infoForm.end_time);
+    },
+    beforeAdRemove() {
+      return this.$confirm(`确定移除？`);
+    },
+    adRemove(file, fileList) {
+      this.infoForm.image_url = "";
+    },
+    getQiniuToken() {
+      let that = this;
+      this.axios.post("index/getQiniuToken").then((response) => {
+        let resInfo = response.data.data;
+        console.log(resInfo);
+        that.picData.token = resInfo.token;
+        that.url = resInfo.url;
+      });
+    },
+    goBackPage() {
+      this.$router.go(-1);
+    },
+    onSubmitInfo() {
+      console.log(this.infoForm);
+      // return false;
+      let time = this.infoForm.end_time;
+      if (time == 0) {
+        this.$message({
+          type: "error",
+          message: "请选择时间",
+        });
+        return false;
+      }
+      if (this.infoForm.link_type == 0) {
+        if (this.infoForm.goods_id == 0) {
+          this.$message({
+            type: "error",
+            message: "请选择商品",
+          });
+          return false;
+        }
+      }
+      if (this.infoForm.link_type == 1) {
+        if (this.infoForm.link == "") {
+          this.$message({
+            type: "error",
+            message: "请输入链接",
+          });
+          return false;
+        }
+      }
+      this.$refs["infoForm"].validate((valid) => {
+        if (valid) {
+          this.axios.post("ad/store", this.infoForm).then((response) => {
+            if (response.data.errno === 0) {
+              this.$message({
+                type: "success",
+                message: "保存成功",
+              });
+              this.$router.go(-1);
+            } else if (response.data.errno === 100) {
+              this.$message({
+                type: "error",
+                message: "该商品已经有广告关联",
+              });
+            } else {
+              this.$message({
+                type: "error",
+                message: "保存失败",
+              });
+            }
+          });
+        } else {
+          return false;
+        }
+      });
+    },
+    getInfo() {
+      if (this.infoForm.id <= 0) {
+        return false;
+      }
+      //加载广告详情
+      let that = this;
+      this.axios
+        .get("ad/info", {
+          params: {
+            id: that.infoForm.id,
+          },
+        })
+        .then((response) => {
+          let resInfo = response.data.data;
+          resInfo.enabled = resInfo.enabled ? "1" : "0";
+          that.infoForm = resInfo;
+          that.infoForm.end_time = resInfo.end_time * 1000;
+          let info = {
+            name: resInfo.name,
+            url: resInfo.image_url,
+          };
+          this.fileList.push(info);
+          console.log(this.infoForm);
+        });
+    },
+  },
+  components: {},
+  mounted() {
+    this.infoForm.id = this.$route.query.id || 0;
+    this.getInfo();
+    this.root = api.rootUrl;
+    this.url = api.alioss;
+    // this.getQiniuToken();
+    this.uploadFileUrl = api.uploadAddress;
+  },
+};
 </script>
 
 <style scoped>
-    .image-show {
-		width: 375px;
-		height: 220px;
-		background-color: #f9f9f9;
-		display: block;
-	}
+.image-show {
+  width: 375px;
+  height: 220px;
+  background-color: #f9f9f9;
+  display: block;
+}
 
-    .id-input {
-        margin-bottom: 20px;
-    }
+.id-input {
+  margin-bottom: 20px;
+}
 
-    .link-input .el-input__inner {
-        width: 400px !important;
-    }
-	
-	.o-shadow {
-		position: absolute;
-		bottom: 10px;
-		right: 10px;
-		background-color: rgba(0, 0, 0, .5);
-		opacity: 0;
-		transition: opacity .3s;
-		color: #fff;
-		font-size: 20px;
-		line-height: 20px;
-		padding: 10px;
-		cursor: pointer;
-	}
-	
-	.index-image {
-		width: 375px;
-		height: 220px;
-		position: relative;
-	}
-	
-	.index-image:hover .o-shadow {
-		opacity: 1;
-	}
+.link-input .el-input__inner {
+  width: 400px !important;
+}
+
+.o-shadow {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  background-color: rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transition: opacity 0.3s;
+  color: #fff;
+  font-size: 20px;
+  line-height: 20px;
+  padding: 10px;
+  cursor: pointer;
+}
+
+.index-image {
+  width: 375px;
+  height: 220px;
+  position: relative;
+}
+
+.index-image:hover .o-shadow {
+  opacity: 1;
+}
 </style>

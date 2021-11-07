@@ -1,5 +1,6 @@
 // const rootUrl = 'http://www.hiolabs.com:8360/admin/';
-const rootUrl = 'https://iwzwz.com:5010/admin/';
+const rootUrl = 'http://localhost:8360/admin/';
+// const rootUrl = 'https://iwzwz.com:5010/admin/';
 
 const api = {
     rootUrl : rootUrl,
@@ -10,9 +11,10 @@ const api = {
     //     request_url: 'http://api.kdniao.cc/Ebusiness/EbusinessOrderHandle.aspx'
     // },
 	// 4.19更新，物流查询不需要以上配置，只需要在server的config配置阿里云物流接口就可以
-    qiniu: 'http://up-z1.qiniu.com',
+    uploadAddress: 'goods/uploadHttpsImage',
+    alioss: "https://laosange-image.oss-cn-beijing.aliyuncs.com/",
     // 请根据自己创建的七牛的区域进行设置：
-    // https://developer.qiniu.com/kodo/manual/1671/region-endpoint
+    // https://developer.uploadAddress.com/kodo/manual/1671/region-endpoint
 	// 华东	  http(s)://up.qiniup.com
 	// 华北	  http(s)://up-z1.qiniup.com
 	// 华南	  http(s)://up-z2.qiniup.com

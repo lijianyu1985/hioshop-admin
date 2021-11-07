@@ -55,6 +55,7 @@
   "dependencies": {
     "axios": "^0.16.2",
     "bootstrap": "^3.4.1",
+    "browser-md5-file": "^1.1.1",
     "clipboard": "^2.0.4",
     "codemirror": "^5.49.0",
     "element-ui": "^2.12.0",
